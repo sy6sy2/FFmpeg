@@ -727,7 +727,13 @@ static CFDictionaryRef videotoolbox_decoder_config_create(CMVideoCodecType codec
         if (data)
             CFDictionarySetValue(avc_info, CFSTR("esds"), data);
         break;
-    case kCMVideoCodecType_H264 :
+    case kCMVideoCodecType_H264 : {
+        H264Context *h = avctx->priv_data;
+        if (TARGET_OS_IPHONE && h->ps.sps->frame_mbs_only_flag == 0) {
+            av_log(avctx, AV_LOG_ERROR, "VideoToolbox cannot decode interlaced fields on iOS\n");
+            CFRelease(avc_info);
+            goto fail;
+        }
         data = ff_videotoolbox_avcc_extradata_create(avctx);
         if (data)
             CFDictionarySetValue(avc_info, CFSTR("avcC"), data);
@@ -737,6 +743,7 @@ static CFDictionaryRef videotoolbox_decoder_config_create(CMVideoCodecType codec
         if (data)
             CFDictionarySetValue(avc_info, CFSTR("hvcC"), data);
         break;
+    }
     default:
         break;
     }
@@ -750,6 +757,10 @@ static CFDictionaryRef videotoolbox_decoder_config_create(CMVideoCodecType codec
 
     CFRelease(avc_info);
     return config_info;
+
+fail:
+    CFRelease(config_info);
+    return NULL;
 }
 
 static int videotoolbox_start(AVCodecContext *avctx)
